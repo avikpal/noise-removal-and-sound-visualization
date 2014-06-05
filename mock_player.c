@@ -57,8 +57,6 @@ file name to which it has to be saved/ or which has to be played back.
 	    system(CommandString);
 	
         }
-	
-	
         }
     
         if(strcmp(argv[1], "playback")==0){
