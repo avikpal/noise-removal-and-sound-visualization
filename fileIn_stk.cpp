@@ -21,7 +21,6 @@ int main(){
 	
 	input.setRate(44100.0);
 
-
 	output.tick(input.tick(frames));
 
 	return 0;
