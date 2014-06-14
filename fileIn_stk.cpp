@@ -11,7 +11,7 @@ int main(){
 	FileWvIn input;
 	FileWvOut output;
 
-	input.openFile("mic.wav",true);
+	input.openFile("mic.wav");
 
 	StkFrames frames(input.getSize(),2);
 	
@@ -19,7 +19,7 @@ int main(){
 	std::cout<<input.getSize()<<'\n';
 	output.openFile("hellowave.wav", 2, stk::FileWrite::FILE_WAV ,Stk::STK_SINT32);
 	
-	input.setRate(44100.0);
+	input.setRate(440.0);
 
 	output.tick(input.tick(frames));
 
