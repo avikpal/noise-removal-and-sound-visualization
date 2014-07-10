@@ -51,7 +51,7 @@ void localMaxima(cv::Mat src, cv::Mat &dst, int squareSize){
 	// (boolean) ? "return peak even if it is at 0" : "return peak discarding 0"
 
 	int threshld= maxUsedValInHistogramData(dst, false);
-	threshold(dst,temp,threshld,1,THRESH_BINARY);
+	threshold(dst,temp,threshld,1,THRESH_TOZERO);
 
 	dst = dst.mul(temp);
 
