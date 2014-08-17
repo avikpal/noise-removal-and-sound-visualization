@@ -22,67 +22,108 @@
 #include <stdio.h>
 #include <opencv2/opencv.hpp>
 
+#define THRES_MOD 10
+
 using namespace cv;
 using namespace std;
 
-void localMaxima(cv::Mat src, cv::Mat &dst, int squareSize){
-	if(squareSize==0){
-		dst = src.clone();
-		return;
-	}
+string type2str(int type) {
+  string r;
 
-	Mat temp;
-	dst = src.clone();
-	Point maxLoc(0,0);
+  uchar depth = type & CV_MAT_DEPTH_MASK;
+  uchar chans = 1 + (type >> CV_CN_SHIFT);
 
-	int sqrCentre = (squareSize-1)/2 ;
+  switch ( depth ) {
+    case CV_8U:  r = "8U"; break;
+    case CV_8S:  r = "8S"; break;
+    case CV_16U: r = "16U"; break;
+    case CV_16S: r = "16S"; break;
+    case CV_32S: r = "32S"; break;
+    case CV_32F: r = "32F"; break;
+    case CV_64F: r = "64F"; break;
+    default:     r = "User"; break;
+  }
 
-	//Create the localWindow mask to do things faster
-	//When we find a global maxima we will multiply the subwindow with the following mask
-	//so as we don't need to search for those values again and again
+  r += "C";
+  r += (chans+'0');
 
-	Mat localWindowMask = Mat::zeros(Size(squareSize,squareSize),CV_8U); //boolean
-	localWindowMask.at<unsigned char>(sqrCentre,sqrCentre)=1;
+  return r;
+}
 
-	//Finding a threshold value to threshold the images
-	//this function here returns the peak of histogram of picture
-	//the picture is a threshold picture it will have a lot of zero values in
-	//so the second boolean variable:
-	// (boolean) ? "return peak even if it is at 0" : "return peak discarding 0"
+void localMaxima(cv::Mat src,cv::Mat &dst,int squareSize)
+{
+if (squareSize==0)
+{
+    dst = src.clone();
+    return;
+}
 
-	int threshld= maxUsedValInHistogramData(dst, false);
-	threshold(dst,temp,threshld,1,THRESH_TOZERO);
+Mat m0;
+dst = src.clone();
+Point maxLoc(0,0);
 
-	dst = dst.mul(temp);
+//1.Be sure to have at least 3x3 for at least looking at 1 pixel close neighbours
+//  Also the window must be <odd>x<odd>
+//SANITYCHECK(squareSize,3,1);
+int sqrCenter = (squareSize-1)/2;
 
-	for(int row=sqrCentre; row<dst.size().height-sqrCentre; row++){
-		for(int col=sqrCentre; col<dst.size().width-sqrCentre; col++){
+//2.Create the localWindow mask to get things done faster
+//  When we find a local maxima we will multiply the subwindow with this MASK
+//  So that we will not search for those 0 values again and again
 
-			if(dst.at<unsigned char>(row, col)==0)
-				continue;
-			temp = dst.colRange(col-sqrCentre, col+sqrCentre+1).rowRange(row-sqrCentre,row+sqrCentre+1);
-			minMaxLoc(temp,NULL,NULL,NULL,&maxLoc);
+Mat localWindowMask = Mat::zeros(Size(squareSize,squareSize),CV_8U);
 
-			//if the maximum location of this subwindow is at center
-			//it means we have the local Maxima
-			//we should delete surrounding values in the subwindow
-			//hence we will not try to find if a point is at localMaxima when already found
+//Mat localWindowMask = Mat::zeros(Size(squareSize,squareSize),CV_8UC3);//boolean
 
-			if((maxLoc.x==sqrCentre) && (maxLoc.y==sqrCentre))
-			{
-				temp=temp.mul(localWindowMask);
-				col+=sqrCentre;
-			}
-		}
-	}
+localWindowMask.at<unsigned char>(sqrCenter,sqrCenter)=1;
+
+//3.Find the threshold value to threshold the image
+    //this function here returns the peak of histogram of picture
+    //the picture is a thresholded picture it will have a lot of zero values in it
+    //so that the second boolean variable says :
+    //  (boolean) ? "return peak even if it is at 0" : "return peak discarding 0"
+//int thrshld =  maxUsedValInHistogramData(dst,false);
+
+int thrshld = 75 - THRES_MOD; //say
+threshold(dst,m0,thrshld,255,1);
+
+imwrite("finalThresholdedImage.png",m0);
+
+//4.Now delete all thresholded values from picture
+dst = dst.mul(m0);
+
+//put the src in the middle of the big array
+for (int row=sqrCenter;row<dst.size().height-sqrCenter;row++)
+    for (int col=sqrCenter;col<dst.size().width-sqrCenter;col++)
+    {
+        //1.if the value is zero it can not be a local maxima
+        if (dst.at<unsigned char>(row,col)==0)
+            continue;
+        //2.the value at (row,col) is not 0 so it can be a local maxima point
+        m0 =  dst.colRange(col-sqrCenter,col+sqrCenter+1).rowRange(row-sqrCenter,row+sqrCenter+1);
+        minMaxLoc(m0,NULL,NULL,NULL,&maxLoc);
+        //if the maximum location of this subWindow is at center
+        //it means we found the local maxima
+        //so we should delete the surrounding values which lies in the subWindow area
+        //hence we will not try to find if a point is at localMaxima when already found a neighbour was
+        if ((maxLoc.x==sqrCenter)&&(maxLoc.y==sqrCenter))
+        {
+            //m0 = m0.mul(localWindowMask);
+                            //we can skip the values that we already made 0 by the above function
+            col+=sqrCenter;
+        }
+    }
 }
 
 int main(int argc, char* argv[]){
 
-	Mat IdealAudioSpectrogram, PronuncedAudioSpectrogram;
+	Mat IdealAudioSpectrogram; // TODO PronuncedAudioSpectrogram;
 	//for loading spectrogram images
-	IdealAudioSpectrogram = imread(argv[1]);
-	//load the spectrogram of already recorded audio
+	IdealAudioSpectrogram = imread("finalimageGrayscale.png");
+	//string ty = type2str(IdealAudioSpectrogram.type());
+
+	//cout<<ty.c_str()<<endl;
+	//load the thresholded spectrogram of already recorded audio
 
 	//TODO
 	//PronuncedAudioSpectrogram = imread(argv[2]);
@@ -90,8 +131,10 @@ int main(int argc, char* argv[]){
 	//load the spectrogram of pronunced audio
 
 	//test with values
+	vector<Mat>grayPlanes;
+	split(IdealAudioSpectrogram,grayPlanes);
 	Mat maxoutput;
-	localMaxima(IdealAudioSpectrogram, &maxoutput,3);
+	localMaxima(IdealAudioSpectrogram, grayPlanes[2],3);
 	imwrite("maximage.png", maxoutput);
 
 
